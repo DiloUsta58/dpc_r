@@ -134,6 +134,13 @@ html, body {
   display: block;
 }
 
+.menu-separator {
+  height: 1px;
+  background: var(--line);
+  opacity: 0.5;
+  margin: 4px 2px;
+}
+
 .menu-dropdown a {
   display: block;
   color: var(--text);
