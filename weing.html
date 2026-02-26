@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Eingang</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body class="weing-page">
+  <div class="page-wrap">
+  <div class="page">
+    <div class="date-line"><span>Datum:</span><span class="line current-date"></span></div>
+    <div class="top-actions">
+      <div class="top-actions-row actions-secondary">
+        <button id="weingSaveBtn" type="button">Speichern</button>
+        <button id="weingLoadBtn" type="button">Load</button>
+        <button id="weingBackBtn" type="button">Zurück</button>
+        <span id="weingStatus" aria-live="polite"></span>
+      </div>
+    </div>
+    <h1>Eingang</h1>
+
+    <table id="weingTable" class="editable-grid-table">
+      <thead>
+        <tr>
+          <th style="width: 9%;">Abt.</th>
+          <th style="width: 26%;">Material</th>
+          <th style="width: 32%;">Charge</th>
+          <th style="width: 14%;">Pal. /<br>Pos. Nr.</th>
+          <th style="width: 19%;"><span class="red">Menge / Stk.</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr class="add-row-line">
+          <td colspan="5"><button id="addWeingRowBtn" type="button" aria-label="Zeile hinzufügen">+</button></td>
+        </tr>
+      </tbody>
+    </table>
+    <footer>
+      <div id="kimlik">© Dilaver Bölükbaşı</div>
+      <div id="lastUpdate"></div>
+      <span id="footerVersion">Version: …</span>
+    </footer>
+  </div>
+  </div>
+  <script src="js/dpc.js" defer></script>
+</body>
+</html>
+
+
+
+
