@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.27";
+  const appVersion = "1.0.28";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
   let buildInfoCache = null;
@@ -936,20 +936,31 @@ document.addEventListener("DOMContentLoaded", () => {
     saveStatus.classList.toggle("error", Boolean(isError));
   };
 
+  const backupKeyPrefixes = [
+    "dpc:index:",
+    "dpc:wvorbe:",
+    "dpc:weing:",
+    "dpc:auto:wvorbe:",
+    "dpc:selectedDate"
+  ];
+
+  const isBackupKey = (key) => backupKeyPrefixes.some((prefix) => String(key).startsWith(prefix));
+
   const listDpcKeys = () => {
     const keys = [];
     for (let i = 0; i < localStorage.length; i += 1) {
       const key = localStorage.key(i);
-      if (typeof key === "string" && key.startsWith("dpc:")) {
+      if (typeof key === "string" && isBackupKey(key)) {
         keys.push(key);
       }
     }
-    return keys;
+    return keys.sort();
   };
 
   const buildBackupPayload = () => {
     const storage = {};
-    listDpcKeys().forEach((key) => {
+    const keys = listDpcKeys();
+    keys.forEach((key) => {
       const value = localStorage.getItem(key);
       if (value !== null) {
         storage[key] = value;
@@ -957,8 +968,9 @@ document.addEventListener("DOMContentLoaded", () => {
     });
     return {
       app: "dpc",
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
+      keyCount: keys.length,
       storage
     };
   };
@@ -967,15 +979,37 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!payload || typeof payload !== "object" || !payload.storage || typeof payload.storage !== "object") {
       throw new Error("Ungültiges Backup-Format");
     }
+    if (payload.app && payload.app !== "dpc") {
+      throw new Error("Falsche App-Backup-Datei");
+    }
 
-    listDpcKeys().forEach((key) => localStorage.removeItem(key));
+    const incomingEntries = Object.entries(payload.storage)
+      .filter(([key]) => isBackupKey(String(key)))
+      .map(([key, value]) => [String(key), typeof value === "string" ? value : JSON.stringify(value)]);
+    if (incomingEntries.length === 0) {
+      throw new Error("Backup enthält keine DPC-Daten");
+    }
 
-    Object.entries(payload.storage).forEach(([key, value]) => {
-      if (!String(key).startsWith("dpc:")) {
-        return;
+    const existingSnapshot = {};
+    listDpcKeys().forEach((key) => {
+      const value = localStorage.getItem(key);
+      if (value !== null) {
+        existingSnapshot[key] = value;
       }
-      localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
     });
+
+    try {
+      listDpcKeys().forEach((key) => localStorage.removeItem(key));
+      incomingEntries.forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+      });
+    } catch (error) {
+      listDpcKeys().forEach((key) => localStorage.removeItem(key));
+      Object.entries(existingSnapshot).forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+      });
+      throw error;
+    }
   };
 
   if (exportLocalFileBtn) {
