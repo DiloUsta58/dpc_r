@@ -62,6 +62,15 @@ document.addEventListener("DOMContentLoaded", () => {
     return formatNumber(clamped);
   };
 
+  const extractPosNumberFromLabel = (rowLabel) => {
+    const match = String(rowLabel || "").toUpperCase().match(/POS\.?\s*(\d+)/);
+    if (!match) {
+      return null;
+    }
+    const parsed = Number.parseInt(match[1], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const deDateFormatter = new Intl.DateTimeFormat("de-DE", {
     day: "2-digit",
     month: "2-digit",
@@ -117,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.15";
+  const appVersion = "1.0.27";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
   let buildInfoCache = null;
@@ -252,8 +261,47 @@ document.addEventListener("DOMContentLoaded", () => {
   checkForAppUpdate();
 
   let saveAutoWvorbeRows = () => {};
+  let suppressRemarkPropagation = false;
+  const sonderRowsData = [];
   const stockRowsData = [];
   const stockRows = document.querySelectorAll("table.tight tbody tr");
+
+  const propagateNvToSamePosition = (sourceRowLabel, sourceBemerkInput) => {
+    if (suppressRemarkPropagation) {
+      return;
+    }
+
+    const sourceValue = String(sourceBemerkInput?.value || "").trim().toLowerCase();
+    if (sourceValue !== "n.v.") {
+      return;
+    }
+
+    const sourcePos = extractPosNumberFromLabel(sourceRowLabel);
+    if (sourcePos === null) {
+      return;
+    }
+
+    suppressRemarkPropagation = true;
+    try {
+      stockRowsData.forEach((entry) => {
+        if (!entry.bemerkInput || entry.bemerkInput === sourceBemerkInput) {
+          return;
+        }
+        if (extractPosNumberFromLabel(entry.rowLabel) !== sourcePos) {
+          return;
+        }
+        const targetValue = String(entry.bemerkInput.value || "").trim().toLowerCase();
+        if (targetValue === "n.v.") {
+          return;
+        }
+        entry.bemerkInput.value = "n.v.";
+        entry.bemerkInput.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    } finally {
+      suppressRemarkPropagation = false;
+    }
+  };
+
   stockRows.forEach((row) => {
     const cells = row.querySelectorAll("td");
     if (cells.length < 5) {
@@ -274,6 +322,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const tableTitle = tableTitleRaw.replace(/\s+/g, " ").trim().toUpperCase();
     const rowLabel = (cells[0].textContent || "").replace(/\s+/g, " ").trim();
     const rowName = rowLabel.toUpperCase();
+    const isSonder = tableTitle.includes("SONDERBEST");
+    const materialInput = cells[0].querySelector("input[type='text']");
 
     if (fixedMax) {
       istMaxInput.dataset.baseMax = fixedMax;
@@ -309,24 +359,57 @@ document.addEventListener("DOMContentLoaded", () => {
       istMaxInput.value = safeIst;
     };
 
-    istMaxInput.addEventListener("input", lockMaxPart);
-    istMaxInput.addEventListener("change", lockMaxPart);
-    lockMaxPart();
+    if (!isSonder) {
+      istMaxInput.addEventListener("input", lockMaxPart);
+      istMaxInput.addEventListener("change", lockMaxPart);
+      lockMaxPart();
 
-    bereitstInput.readOnly = true;
-    bereitstInput.tabIndex = -1;
-    bereitstInput.classList.add("auto-bereitst");
-    bereitstInput.value = "-";
+      bereitstInput.readOnly = true;
+      bereitstInput.tabIndex = -1;
+      bereitstInput.classList.add("auto-bereitst");
+      bereitstInput.value = "-";
 
-    const syncBereitst = () => {
-      const currentMaxStr = istMaxInput.dataset.currentMax || istMaxInput.dataset.baseMax || "";
-      const combined = `${String(istMaxInput.value || "").trim()}/${String(currentMaxStr).replace(".", ",")}`;
-      bereitstInput.value = calculateOrDash(combined);
-      saveAutoWvorbeRows();
-    };
+      const syncBereitst = () => {
+        const currentMaxStr = istMaxInput.dataset.currentMax || istMaxInput.dataset.baseMax || "";
+        const combined = `${String(istMaxInput.value || "").trim()}/${String(currentMaxStr).replace(".", ",")}`;
+        bereitstInput.value = calculateOrDash(combined);
+        saveAutoWvorbeRows();
+      };
 
-    istMaxInput.addEventListener("input", syncBereitst);
-    istMaxInput.addEventListener("change", syncBereitst);
+      istMaxInput.addEventListener("input", syncBereitst);
+      istMaxInput.addEventListener("change", syncBereitst);
+    } else {
+      const validateSonderBereitst = () => {
+        const raw = String(bereitstInput.value || "").trim();
+        if (raw === "") {
+          bereitstInput.setCustomValidity("");
+          return;
+        }
+        const unitMatch = raw.match(/^[-+]?\d+(?:[.,]\d+)?\s*[A-Za-zÄÖÜäöü]+\.?$/);
+        if (!unitMatch) {
+          bereitstInput.setCustomValidity("Bitte Einheit angeben, z.B. 1000 Kg oder 50 Stk.");
+          bereitstInput.reportValidity();
+          return;
+        }
+        bereitstInput.setCustomValidity("");
+      };
+
+      istMaxInput.addEventListener("input", saveAutoWvorbeRows);
+      istMaxInput.addEventListener("change", saveAutoWvorbeRows);
+      bereitstInput.addEventListener("input", () => {
+        validateSonderBereitst();
+        saveAutoWvorbeRows();
+      });
+      bereitstInput.addEventListener("blur", validateSonderBereitst);
+      if (materialInput) {
+        materialInput.addEventListener("input", saveAutoWvorbeRows);
+      }
+      sonderRowsData.push({
+        materialInput,
+        mengeInput: istMaxInput,
+        bereitstInput
+      });
+    }
 
     const bemerkInput = cells[4].querySelector("input[type='text']");
     const statusCheckInRow = row.querySelector(".status-check");
@@ -362,6 +445,9 @@ document.addEventListener("DOMContentLoaded", () => {
         const isNotAvailable = value === "n.v.";
         row.classList.toggle("row-not-available", isNotAvailable);
         syncRemarkLockState(isNotAvailable ? "n.v." : "");
+        if (isNotAvailable) {
+          propagateNvToSamePosition(rowLabel, bemerkInput);
+        }
       };
 
       const validateBemerkValue = () => {
@@ -369,6 +455,9 @@ document.addEventListener("DOMContentLoaded", () => {
         bemerkInput.value = normalized;
         row.classList.toggle("row-not-available", normalized === "n.v.");
         syncRemarkLockState(normalized);
+        if (normalized === "n.v.") {
+          propagateNvToSamePosition(rowLabel, bemerkInput);
+        }
         saveAutoWvorbeRows();
       };
 
@@ -387,24 +476,46 @@ document.addEventListener("DOMContentLoaded", () => {
       tableTitle,
       rowName,
       rowLabel,
-      statusCheck
+      statusCheck,
+      bemerkInput
     });
   });
 
   const extractDeptCode = (tableTitle) => {
     const normalized = String(tableTitle || "").replace(/\s+/g, " ").trim().toUpperCase();
+    if (normalized.includes("SONDERBESTELLUNG")) {
+      return "WA";
+    }
+    if (normalized.includes("SONDERBEST. MATERIAL")) {
+      return "WA";
+    }
     const match = normalized.match(/ABT\.\s*:\s*([A-Z]+)/);
     return match ? match[1] : "";
   };
 
   const isExcludedForAutoWvorbe = (tableTitle) => {
     const t = String(tableTitle || "").toUpperCase();
-    return t.includes("POWERGR") || t.includes("STRAHLHAUS");
+    return false;
   };
 
   const isFmRegalTable = (tableTitle) => {
     const t = String(tableTitle || "").toUpperCase();
     return /FM-\s*REGAL/.test(t);
+  };
+
+  const isFmPowergrTable = (tableTitle) => {
+    const t = String(tableTitle || "").toUpperCase();
+    return t.includes("POWERGR");
+  };
+
+  const isFmStrahlhausTable = (tableTitle) => {
+    const t = String(tableTitle || "").toUpperCase();
+    return t.includes("STRAHLHAUS");
+  };
+
+  const isSonderbestTable = (tableTitle) => {
+    const t = String(tableTitle || "").toUpperCase();
+    return t.includes("SONDERBEST");
   };
 
   const packSizeByPosition = {
@@ -431,14 +542,7 @@ document.addEventListener("DOMContentLoaded", () => {
     25: 5
   };
 
-  const extractPositionNumber = (rowLabel) => {
-    const match = String(rowLabel || "").toUpperCase().match(/POS\.?\s*(\d+)/);
-    if (!match) {
-      return null;
-    }
-    const parsed = Number.parseInt(match[1], 10);
-    return Number.isFinite(parsed) ? parsed : null;
-  };
+  const extractPositionNumber = (rowLabel) => extractPosNumberFromLabel(rowLabel);
 
   const buildAutoWvorbeRows = () => {
     const rows = [];
@@ -453,8 +557,43 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       const dept = extractDeptCode(entry.tableTitle);
+      if (!dept) {
+        return;
+      }
+
+      if (isSonderbestTable(entry.tableTitle)) {
+        const rowCells = entry.row.querySelectorAll("td");
+        const materialText = String(rowCells[0]?.querySelector("input[type='text']")?.value || "").trim();
+        const menge = parseNumber(entry.istMaxInput.value);
+        const bereitRaw = String(entry.bereitstInput.value || "").trim();
+        if (!materialText || menge === null || menge <= 0 || bereitRaw === "") {
+          return;
+        }
+
+        const bereMatch = bereitRaw.match(/^([-+]?\d+(?:[.,]\d+)?)\s*([A-Za-zÄÖÜäöü]+\.?)$/);
+        if (!bereMatch) {
+          return;
+        }
+
+        const bereitNum = parseNumber(bereMatch[1]);
+        const unit = String(bereMatch[2] || "").trim();
+        if (bereitNum === null || !unit) {
+          return;
+        }
+
+        const total = menge * bereitNum;
+        rows.push([
+          "",
+          materialText,
+          "",
+          "",
+          `${formatNumber(total)} ${unit}`
+        ]);
+        return;
+      }
+
       const material = String(entry.rowLabel || "").replace(/\s+/g, " ").trim();
-      if (!dept || !material) {
+      if (!material) {
         return;
       }
 
@@ -479,7 +618,7 @@ document.addEventListener("DOMContentLoaded", () => {
           material,
           "",
           "",
-          `${formatNumber(totalKg)}kg`
+          `${formatNumber(totalKg)} Kg`
         ]);
         return;
       }
@@ -494,6 +633,34 @@ document.addEventListener("DOMContentLoaded", () => {
         return;
       }
 
+      if (isFmPowergrTable(entry.tableTitle)) {
+        const totalPieces = diff * 5;
+        rows.push([
+          dept,
+          material,
+          "",
+          "",
+          `${formatNumber(totalPieces)} Stk.`
+        ]);
+        return;
+      }
+
+      if (isFmStrahlhausTable(entry.tableTitle)) {
+        const normalized = material.toUpperCase();
+        if (normalized !== "NK60" && normalized !== "NK90") {
+          return;
+        }
+        const totalKg = diff * 1000;
+        rows.push([
+          dept,
+          material,
+          "",
+          "",
+          `${formatNumber(totalKg)} Kg`
+        ]);
+        return;
+      }
+
       const integerDiff = Math.round(diff);
       if (Math.abs(diff - integerDiff) < 1e-9) {
         for (let i = 0; i < integerDiff; i += 1) {
@@ -502,7 +669,7 @@ document.addEventListener("DOMContentLoaded", () => {
             material,
             "",
             "",
-            "1000kg"
+            "1000 Kg"
           ]);
         }
         return;
@@ -579,6 +746,9 @@ document.addEventListener("DOMContentLoaded", () => {
       if (isFriday && entry.tableTitle.includes("STRAHLHAUS")) {
         targetMax = "2";
       }
+      if (isFriday && entry.tableTitle.includes("POWERGR") && entry.rowName === "POS. 25") {
+        targetMax = "15";
+      }
 
       entry.istMaxInput.dataset.currentMax = targetMax;
       const suffix = entry.istMaxInput.closest(".istmax-wrap")?.querySelector(".max-suffix");
@@ -628,6 +798,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const importFileInput = document.getElementById("importFileInput");
   const notesCells = Array.from(document.querySelectorAll(".notes-table td[contenteditable='true']"));
   const istInputs = Array.from(document.querySelectorAll("table.tight tbody tr td:nth-child(2) input[type='text']"));
+  const sonderMaterialInputs = Array.from(document.querySelectorAll("table.tbl-wa tbody tr td:nth-child(1) input[type='text']"));
+  const sonderBereitstInputs = Array.from(document.querySelectorAll("table.tbl-wa tbody tr td:nth-child(3) input[type='text']"));
   const checks = Array.from(document.querySelectorAll(".status-check"));
   const remarkInputs = Array.from(document.querySelectorAll("table.tight tbody tr td:nth-child(5) input[type='text']"));
 
@@ -640,6 +812,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const checksValues = checks.map((el) => el.checked);
     const remarkValues = remarkInputs.map((el) => el.value);
     const notes = notesCells.map((el) => el.textContent || "");
+    const sonderMaterials = sonderMaterialInputs.map((el) => el.value || "");
+    const sonderBereitstValues = sonderBereitstInputs.map((el) => el.value || "");
 
     return {
       date: deDateFormatter.format(fromIsoLocal(selectedIso)),
@@ -648,6 +822,8 @@ document.addEventListener("DOMContentLoaded", () => {
       checks: checksValues,
       remarkValues,
       notes,
+      sonderMaterials,
+      sonderBereitstValues,
       autoWvorbeRows: buildAutoWvorbeRows()
     };
   };
@@ -720,6 +896,24 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         input.value = data.remarkValues[index];
         input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    if (Array.isArray(data.sonderMaterials)) {
+      sonderMaterialInputs.forEach((input, index) => {
+        if (typeof data.sonderMaterials[index] !== "string") {
+          return;
+        }
+        input.value = data.sonderMaterials[index];
+      });
+    }
+
+    if (Array.isArray(data.sonderBereitstValues)) {
+      sonderBereitstInputs.forEach((input, index) => {
+        if (typeof data.sonderBereitstValues[index] !== "string") {
+          return;
+        }
+        input.value = data.sonderBereitstValues[index];
       });
     }
 
@@ -1172,6 +1366,44 @@ document.addEventListener("DOMContentLoaded", () => {
       return rows.filter((row) => Array.isArray(row)).map((row) => row.map((cell) => String(cell || "")));
     };
 
+    const sortRowsByDept = (rows) => {
+      if (!Array.isArray(rows)) {
+        return [];
+      }
+      return rows
+        .map((row, index) => ({ row, index }))
+        .sort((a, b) => {
+          const deptA = String(a.row[0] || "").trim().toLowerCase();
+          const deptB = String(b.row[0] || "").trim().toLowerCase();
+          const aEmpty = deptA === "";
+          const bEmpty = deptB === "";
+          if (aEmpty && !bEmpty) {
+            return 1;
+          }
+          if (!aEmpty && bEmpty) {
+            return -1;
+          }
+          if (deptA < deptB) {
+            return -1;
+          }
+          if (deptA > deptB) {
+            return 1;
+          }
+
+          const materialA = String(a.row[1] || "").trim().toLowerCase();
+          const materialB = String(b.row[1] || "").trim().toLowerCase();
+          if (materialA < materialB) {
+            return -1;
+          }
+          if (materialA > materialB) {
+            return 1;
+          }
+
+          return a.index - b.index;
+        })
+        .map((item) => item.row);
+    };
+
     const getRowKey = (row) => {
       if (!Array.isArray(row)) {
         return "";
@@ -1189,6 +1421,14 @@ document.addEventListener("DOMContentLoaded", () => {
         return "";
       }
       return `${abt}|${material}`;
+    };
+
+    const getMaterialOnlyKey = (row) => {
+      if (!Array.isArray(row)) {
+        return "";
+      }
+      const material = String(row[1] || "").trim().toLowerCase();
+      return material || "";
     };
 
     const getStorageKeyLocal = () => `dpc:${config.storagePrefix}:${selectedIso}`;
@@ -1247,35 +1487,48 @@ document.addEventListener("DOMContentLoaded", () => {
                 .map((row) => getMaterialKey(row))
                 .filter((key) => key !== "")
             );
+            const manualMaterialOnlyKeys = new Set(
+              normalizedManualRows
+                .map((row) => getMaterialOnlyKey(row))
+                .filter((key) => key !== "")
+            );
             const filteredAutoRows = normalizedAutoRows.filter((row) => {
               const rowKey = getRowKey(row);
               const materialKey = getMaterialKey(row);
+              const materialOnlyKey = getMaterialOnlyKey(row);
               if (manualKeys.has(rowKey)) {
                 return false;
               }
               if (materialKey && lockedMaterialKeys.has(materialKey)) {
                 return false;
               }
+              if (materialOnlyKey && manualMaterialOnlyKeys.has(materialOnlyKey)) {
+                return false;
+              }
               return true;
             });
-            applyRows(manualRows, filteredAutoRows);
+            const combinedRows = sortRowsByDept([...normalizedManualRows, ...filteredAutoRows]);
+            applyRows(combinedRows);
             setStatusLocal(`Daten + Auto-Daten von ${selectedLabel} geladen`, false);
             return true;
           }
-          applyRows(manualRows);
+          const sortedManualRows = config.storagePrefix === "wvorbe" ? sortRowsByDept(normalizeRows(manualRows)) : manualRows;
+          applyRows(sortedManualRows);
           setStatusLocal(`Daten von ${selectedLabel} geladen`, false);
           return true;
         }
 
         if (hasMeaningfulRows(normalizedAutoRows)) {
-          applyRows(normalizedAutoRows);
+          const sortedAutoRows = config.storagePrefix === "wvorbe" ? sortRowsByDept(normalizedAutoRows) : normalizedAutoRows;
+          applyRows(sortedAutoRows);
           setStatusLocal(`Auto-Daten von ${selectedLabel} geladen`, false);
           return true;
         }
       }
 
       if (hasMeaningfulRows(normalizedAutoRows)) {
-        applyRows(normalizedAutoRows);
+        const sortedAutoRows = config.storagePrefix === "wvorbe" ? sortRowsByDept(normalizedAutoRows) : normalizedAutoRows;
+        applyRows(sortedAutoRows);
         setStatusLocal(`Auto-Daten von ${selectedLabel} geladen`, false);
         return true;
       }
