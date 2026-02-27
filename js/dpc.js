@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.28";
+  const appVersion = "1.0.29";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
   let buildInfoCache = null;
@@ -1148,17 +1148,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     const weeksInYear = getIsoWeeksInYear(year);
+    const todayYear = todayDate.getFullYear();
+    const maxVisibleWeek = year < todayYear ? weeksInYear : (year === todayYear ? currentIsoWeek : 1);
     kwSelect.innerHTML = "";
 
-    for (let week = 1; week <= weeksInYear; week += 1) {
+    for (let week = 1; week <= maxVisibleWeek; week += 1) {
       const option = document.createElement("option");
       option.value = String(week);
       option.textContent = `KW ${String(week).padStart(2, "0")}`;
       kwSelect.appendChild(option);
     }
 
-    if (selectedWeek > weeksInYear) {
-      selectedWeek = weeksInYear;
+    if (selectedWeek > maxVisibleWeek) {
+      selectedWeek = maxVisibleWeek;
     }
     if (selectedWeek < 1) {
       selectedWeek = 1;
