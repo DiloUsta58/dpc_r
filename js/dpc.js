@@ -117,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.14";
+  const appVersion = "1.0.15";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
   let buildInfoCache = null;
@@ -1179,6 +1179,18 @@ document.addEventListener("DOMContentLoaded", () => {
       return row.map((cell) => String(cell || "").trim().toLowerCase()).join("|");
     };
 
+    const getMaterialKey = (row) => {
+      if (!Array.isArray(row)) {
+        return "";
+      }
+      const abt = String(row[0] || "").trim().toLowerCase();
+      const material = String(row[1] || "").trim().toLowerCase();
+      if (!abt || !material) {
+        return "";
+      }
+      return `${abt}|${material}`;
+    };
+
     const getStorageKeyLocal = () => `dpc:${config.storagePrefix}:${selectedIso}`;
     const getAutoStorageKeyLocal = () => config.autoStoragePrefix ? `dpc:auto:${config.autoStoragePrefix}:${selectedIso}` : "";
     const syncSelectedDateLocal = () => {
@@ -1227,8 +1239,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const manualRows = Array.isArray(data.rows) ? data.rows : [];
         if (hasMeaningfulRows(manualRows)) {
           if (config.storagePrefix === "wvorbe" && hasMeaningfulRows(normalizedAutoRows)) {
-            const manualKeys = new Set(normalizeRows(manualRows).map((row) => getRowKey(row)).filter((key) => key !== ""));
-            const filteredAutoRows = normalizedAutoRows.filter((row) => !manualKeys.has(getRowKey(row)));
+            const normalizedManualRows = normalizeRows(manualRows);
+            const manualKeys = new Set(normalizedManualRows.map((row) => getRowKey(row)).filter((key) => key !== ""));
+            const lockedMaterialKeys = new Set(
+              normalizedManualRows
+                .filter((row) => String(row[2] || "").trim() !== "" || String(row[3] || "").trim() !== "")
+                .map((row) => getMaterialKey(row))
+                .filter((key) => key !== "")
+            );
+            const filteredAutoRows = normalizedAutoRows.filter((row) => {
+              const rowKey = getRowKey(row);
+              const materialKey = getMaterialKey(row);
+              if (manualKeys.has(rowKey)) {
+                return false;
+              }
+              if (materialKey && lockedMaterialKeys.has(materialKey)) {
+                return false;
+              }
+              return true;
+            });
             applyRows(manualRows, filteredAutoRows);
             setStatusLocal(`Daten + Auto-Daten von ${selectedLabel} geladen`, false);
             return true;
