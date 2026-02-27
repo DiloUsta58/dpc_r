@@ -117,9 +117,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.0";
+  const appVersion = "1.0.14";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
+  let buildInfoCache = null;
   let selectedIso = todayIso;
   try {
     const storedSelectedIso = localStorage.getItem(selectedDateStateKey);
@@ -138,21 +139,51 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   };
 
-  const initFooter = () => {
+  const getBuildInfo = async () => {
+    if (buildInfoCache) {
+      return buildInfoCache;
+    }
+
+    try {
+      const response = await fetch(`${appVersionFile}?t=${Date.now()}`, { cache: "no-store" });
+      if (!response.ok) {
+        return null;
+      }
+      const info = await response.json();
+      if (!info || typeof info !== "object") {
+        return null;
+      }
+      buildInfoCache = info;
+      return buildInfoCache;
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const initFooter = async () => {
     const lastUpdateEl = document.getElementById("lastUpdate");
     const footerVersionEl = document.getElementById("footerVersion");
+    const info = await getBuildInfo();
+
     if (lastUpdateEl) {
-      const stamp = new Intl.DateTimeFormat("de-DE", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit"
-      }).format(new Date());
-      lastUpdateEl.textContent = `Letztes Update: ${stamp}`;
+      const rawUpdatedAt = info && typeof info.updatedAt === "string" ? info.updatedAt : "";
+      const parsedDate = rawUpdatedAt ? new Date(rawUpdatedAt) : null;
+      if (parsedDate && Number.isFinite(parsedDate.getTime())) {
+        const stamp = new Intl.DateTimeFormat("de-DE", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        }).format(parsedDate);
+        lastUpdateEl.textContent = `Letztes Update: ${stamp}`;
+      } else {
+        lastUpdateEl.textContent = "Letztes Update: unbekannt";
+      }
     }
     if (footerVersionEl) {
-      footerVersionEl.textContent = `Version: ${appVersion}`;
+      const version = info && typeof info.version === "string" ? info.version : appVersion;
+      footerVersionEl.textContent = `Version: ${version}`;
     }
   };
 
@@ -176,12 +207,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const checkForAppUpdate = async () => {
     try {
-      const response = await fetch(`${appVersionFile}?t=${Date.now()}`, { cache: "no-store" });
-      if (!response.ok) {
-        return;
-      }
-
-      const info = await response.json();
+      const info = await getBuildInfo();
       if (!info || typeof info.version !== "string") {
         return;
       }
@@ -225,10 +251,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
   checkForAppUpdate();
 
+  let saveAutoWvorbeRows = () => {};
+  const stockRowsData = [];
   const stockRows = document.querySelectorAll("table.tight tbody tr");
   stockRows.forEach((row) => {
     const cells = row.querySelectorAll("td");
-    if (cells.length < 4) {
+    if (cells.length < 5) {
       return;
     }
 
@@ -241,20 +269,49 @@ document.addEventListener("DOMContentLoaded", () => {
     const initialValue = String(istMaxInput.value || "").trim();
     const fixedMaxMatch = initialValue.match(/^\/\s*([0-9]+(?:[.,][0-9]+)?)$/);
     const fixedMax = fixedMaxMatch ? fixedMaxMatch[1].replace(",", ".") : null;
-    const fixedMaxValue = fixedMax ? Number.parseFloat(fixedMax) : null;
+    const table = row.closest("table");
+    const tableTitleRaw = table ? (table.querySelector("thead th.section")?.textContent || "") : "";
+    const tableTitle = tableTitleRaw.replace(/\s+/g, " ").trim().toUpperCase();
+    const rowLabel = (cells[0].textContent || "").replace(/\s+/g, " ").trim();
+    const rowName = rowLabel.toUpperCase();
 
-    if (fixedMax && Number.isFinite(fixedMaxValue)) {
-      const lockMaxPart = () => {
-        const raw = String(istMaxInput.value || "");
-        const leftPart = raw.includes("/") ? raw.split("/")[0] : raw;
-        const safeIst = clampIstToRange(leftPart, fixedMaxValue);
-        istMaxInput.value = `${safeIst}/${fixedMax.replace(".", ",")}`;
-      };
-
-      istMaxInput.addEventListener("input", lockMaxPart);
-      istMaxInput.addEventListener("change", lockMaxPart);
-      lockMaxPart();
+    if (fixedMax) {
+      istMaxInput.dataset.baseMax = fixedMax;
+      istMaxInput.dataset.currentMax = fixedMax;
     }
+
+    const istCell = cells[1];
+    if (istCell && fixedMax) {
+      const wrap = document.createElement("div");
+      wrap.className = "istmax-wrap";
+
+      const maxSuffix = document.createElement("span");
+      maxSuffix.className = "max-suffix";
+      maxSuffix.textContent = `/${fixedMax.replace(".", ",")}`;
+
+      istMaxInput.classList.add("ist-only-input");
+      istMaxInput.value = "";
+
+      istCell.insertBefore(wrap, istMaxInput);
+      wrap.appendChild(istMaxInput);
+      wrap.appendChild(maxSuffix);
+    }
+
+    const lockMaxPart = () => {
+      const currentMaxStr = istMaxInput.dataset.currentMax || istMaxInput.dataset.baseMax || "";
+      const currentMaxValue = Number.parseFloat(String(currentMaxStr).replace(",", "."));
+      if (!Number.isFinite(currentMaxValue)) {
+        return;
+      }
+
+      const rawIst = String(istMaxInput.value || "");
+      const safeIst = clampIstToRange(rawIst, currentMaxValue);
+      istMaxInput.value = safeIst;
+    };
+
+    istMaxInput.addEventListener("input", lockMaxPart);
+    istMaxInput.addEventListener("change", lockMaxPart);
+    lockMaxPart();
 
     bereitstInput.readOnly = true;
     bereitstInput.tabIndex = -1;
@@ -262,12 +319,279 @@ document.addEventListener("DOMContentLoaded", () => {
     bereitstInput.value = "-";
 
     const syncBereitst = () => {
-      bereitstInput.value = calculateOrDash(istMaxInput.value);
+      const currentMaxStr = istMaxInput.dataset.currentMax || istMaxInput.dataset.baseMax || "";
+      const combined = `${String(istMaxInput.value || "").trim()}/${String(currentMaxStr).replace(".", ",")}`;
+      bereitstInput.value = calculateOrDash(combined);
+      saveAutoWvorbeRows();
     };
 
     istMaxInput.addEventListener("input", syncBereitst);
     istMaxInput.addEventListener("change", syncBereitst);
+
+    const bemerkInput = cells[4].querySelector("input[type='text']");
+    const statusCheckInRow = row.querySelector(".status-check");
+    if (bemerkInput) {
+      const normalizeBemerkValue = (value) => {
+        const raw = String(value || "").trim().toLowerCase();
+        if (raw === "") {
+          return "";
+        }
+
+        const compact = raw.replace(/\s+/g, "");
+        if (compact === "nv" || compact === "n.v." || compact === "n.v") {
+          return "n.v.";
+        }
+
+        return "";
+      };
+
+      const syncRemarkLockState = (normalizedValue) => {
+        if (!statusCheckInRow) {
+          return;
+        }
+        const isNotAvailable = normalizedValue === "n.v.";
+        if (isNotAvailable && statusCheckInRow.checked) {
+          statusCheckInRow.checked = false;
+          statusCheckInRow.dispatchEvent(new Event("change", { bubbles: true }));
+        }
+        statusCheckInRow.disabled = isNotAvailable;
+      };
+
+      const syncBemerkState = () => {
+        const value = String(bemerkInput.value || "").trim().toLowerCase();
+        const isNotAvailable = value === "n.v.";
+        row.classList.toggle("row-not-available", isNotAvailable);
+        syncRemarkLockState(isNotAvailable ? "n.v." : "");
+      };
+
+      const validateBemerkValue = () => {
+        const normalized = normalizeBemerkValue(bemerkInput.value);
+        bemerkInput.value = normalized;
+        row.classList.toggle("row-not-available", normalized === "n.v.");
+        syncRemarkLockState(normalized);
+        saveAutoWvorbeRows();
+      };
+
+      bemerkInput.addEventListener("input", syncBemerkState);
+      bemerkInput.addEventListener("change", validateBemerkValue);
+      bemerkInput.addEventListener("blur", validateBemerkValue);
+      validateBemerkValue();
+    }
+
+    const statusCheck = row.querySelector(".status-check");
+
+    stockRowsData.push({
+      istMaxInput,
+      bereitstInput,
+      row,
+      tableTitle,
+      rowName,
+      rowLabel,
+      statusCheck
+    });
   });
+
+  const extractDeptCode = (tableTitle) => {
+    const normalized = String(tableTitle || "").replace(/\s+/g, " ").trim().toUpperCase();
+    const match = normalized.match(/ABT\.\s*:\s*([A-Z]+)/);
+    return match ? match[1] : "";
+  };
+
+  const isExcludedForAutoWvorbe = (tableTitle) => {
+    const t = String(tableTitle || "").toUpperCase();
+    return t.includes("POWERGR") || t.includes("STRAHLHAUS");
+  };
+
+  const isFmRegalTable = (tableTitle) => {
+    const t = String(tableTitle || "").toUpperCase();
+    return /FM-\s*REGAL/.test(t);
+  };
+
+  const packSizeByPosition = {
+    1: 250,
+    2: 250,
+    3: 250,
+    4: 250,
+    5: 50,
+    6: 100,
+    7: 100,
+    8: 10,
+    9: 20,
+    10: 20,
+    11: 100,
+    12: 50,
+    13: 50,
+    14: 20,
+    15: 20,
+    16: 50,
+    17: 250,
+    18: 100,
+    19: 20,
+    20: 20,
+    25: 5
+  };
+
+  const extractPositionNumber = (rowLabel) => {
+    const match = String(rowLabel || "").toUpperCase().match(/POS\.?\s*(\d+)/);
+    if (!match) {
+      return null;
+    }
+    const parsed = Number.parseInt(match[1], 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const buildAutoWvorbeRows = () => {
+    const rows = [];
+    const fmRegalTotals = new Map();
+    stockRowsData.forEach((entry) => {
+      if (isExcludedForAutoWvorbe(entry.tableTitle)) {
+        return;
+      }
+
+      if (!entry.statusCheck || !entry.statusCheck.checked) {
+        return;
+      }
+
+      const dept = extractDeptCode(entry.tableTitle);
+      const material = String(entry.rowLabel || "").replace(/\s+/g, " ").trim();
+      if (!dept || !material) {
+        return;
+      }
+
+      const maxRaw = entry.istMaxInput.dataset.currentMax || entry.istMaxInput.dataset.baseMax || "";
+      const maxValue = parseNumber(maxRaw);
+      const istValue = parseNumber(entry.istMaxInput.value);
+      if (maxValue === null || istValue === null) {
+        return;
+      }
+
+      const diff = Math.max(0, maxValue - istValue);
+      if (diff <= 0) {
+        return;
+      }
+
+      const normalizedMaterial = material.toUpperCase();
+      const isRhosealMaterial = normalizedMaterial === "RHOSEAL" || normalizedMaterial === "RHOSEAL HT";
+      if (isRhosealMaterial) {
+        const totalKg = diff * 25;
+        rows.push([
+          dept,
+          material,
+          "",
+          "",
+          `${formatNumber(totalKg)}kg`
+        ]);
+        return;
+      }
+
+      if (isFmRegalTable(entry.tableTitle)) {
+        const posNo = extractPositionNumber(entry.rowLabel);
+        if (posNo === null) {
+          return;
+        }
+        const previous = fmRegalTotals.get(posNo) || 0;
+        fmRegalTotals.set(posNo, previous + diff);
+        return;
+      }
+
+      const integerDiff = Math.round(diff);
+      if (Math.abs(diff - integerDiff) < 1e-9) {
+        for (let i = 0; i < integerDiff; i += 1) {
+          rows.push([
+            dept,
+            material,
+            "",
+            "",
+            "1000kg"
+          ]);
+        }
+        return;
+      }
+
+      rows.push([
+        dept,
+        material,
+        "",
+        "",
+        `${formatNumber(diff)}`
+      ]);
+    });
+
+    Array.from(fmRegalTotals.keys())
+      .sort((a, b) => a - b)
+      .forEach((posNo) => {
+        const totalDiff = fmRegalTotals.get(posNo) || 0;
+        if (totalDiff <= 0) {
+          return;
+        }
+
+        const packSize = packSizeByPosition[posNo];
+        if (!packSize) {
+          return;
+        }
+
+        const totalPieces = totalDiff * packSize;
+        rows.push([
+          "FM",
+          `Pos. ${posNo}`,
+          "",
+          "",
+          `${formatNumber(totalPieces)} Stk.`
+        ]);
+      });
+
+    return rows;
+  };
+
+  saveAutoWvorbeRows = () => {
+    if (stockRowsData.length === 0) {
+      return;
+    }
+    try {
+      const rows = buildAutoWvorbeRows();
+      const payload = {
+        date: deDateFormatter.format(fromIsoLocal(selectedIso)),
+        savedAt: new Date().toISOString(),
+        source: "index-auto",
+        rows
+      };
+      const autoKey = `dpc:auto:wvorbe:${selectedIso}`;
+      localStorage.setItem(autoKey, JSON.stringify(payload));
+    } catch (error) {
+      // ignore storage errors
+    }
+  };
+
+  const applyDateBasedDefaults = (isoDate, resetValues) => {
+    const date = fromIsoLocal(isoDate);
+    const isFriday = date.getDay() === 5;
+
+    stockRowsData.forEach((entry) => {
+      const baseMax = entry.istMaxInput.dataset.baseMax;
+      if (!baseMax) {
+        return;
+      }
+
+      let targetMax = baseMax;
+      if (isFriday && entry.tableTitle.includes("ABT.: KE") && (entry.rowName === "RHOSEAL" || entry.rowName === "RHOSEAL HT")) {
+        targetMax = "15";
+      }
+      if (isFriday && entry.tableTitle.includes("STRAHLHAUS")) {
+        targetMax = "2";
+      }
+
+      entry.istMaxInput.dataset.currentMax = targetMax;
+      const suffix = entry.istMaxInput.closest(".istmax-wrap")?.querySelector(".max-suffix");
+      if (suffix) {
+        suffix.textContent = `/${targetMax.replace(".", ",")}`;
+      }
+      if (resetValues) {
+        entry.istMaxInput.value = "";
+      }
+      entry.istMaxInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    saveAutoWvorbeRows();
+  };
 
   const statusChecks = document.querySelectorAll(".status-check");
   statusChecks.forEach((check) => {
@@ -278,6 +602,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const syncRowState = () => {
       row.classList.toggle("row-done", check.checked);
+      saveAutoWvorbeRows();
     };
 
     check.addEventListener("change", syncRowState);
@@ -291,6 +616,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const yearValue = document.getElementById("yearValue");
   const kwSelect = document.getElementById("kwSelect");
   const daySelect = document.getElementById("daySelect");
+
+  if (kwSelect || daySelect) {
+    selectedIso = todayIso;
+  }
   const saveStatus = document.getElementById("saveStatus");
   const menuBtn = document.getElementById("menuBtn");
   const menuDropdown = document.getElementById("menuDropdown");
@@ -300,10 +629,16 @@ document.addEventListener("DOMContentLoaded", () => {
   const notesCells = Array.from(document.querySelectorAll(".notes-table td[contenteditable='true']"));
   const istInputs = Array.from(document.querySelectorAll("table.tight tbody tr td:nth-child(2) input[type='text']"));
   const checks = Array.from(document.querySelectorAll(".status-check"));
+  const remarkInputs = Array.from(document.querySelectorAll("table.tight tbody tr td:nth-child(5) input[type='text']"));
 
   const getSnapshot = () => {
-    const istMaxValues = istInputs.map((el) => el.value);
+    const istMaxValues = istInputs.map((el) => {
+      const max = String(el.dataset.currentMax || el.dataset.baseMax || "").replace(".", ",");
+      const ist = String(el.value || "").trim();
+      return `${ist}/${max}`;
+    });
     const checksValues = checks.map((el) => el.checked);
+    const remarkValues = remarkInputs.map((el) => el.value);
     const notes = notesCells.map((el) => el.textContent || "");
 
     return {
@@ -311,7 +646,9 @@ document.addEventListener("DOMContentLoaded", () => {
       savedAt: new Date().toISOString(),
       istMaxValues,
       checks: checksValues,
-      notes
+      remarkValues,
+      notes,
+      autoWvorbeRows: buildAutoWvorbeRows()
     };
   };
 
@@ -346,7 +683,22 @@ document.addEventListener("DOMContentLoaded", () => {
         if (typeof data.istMaxValues[index] !== "string") {
           return;
         }
-        input.value = data.istMaxValues[index];
+        const raw = data.istMaxValues[index];
+        const parts = raw.split("/");
+        if (parts.length === 2) {
+          const nextIst = parts[0].trim();
+          const nextMax = parts[1].trim().replace(",", ".");
+          if (nextMax !== "") {
+            input.dataset.currentMax = nextMax;
+            const suffix = input.closest(".istmax-wrap")?.querySelector(".max-suffix");
+            if (suffix) {
+              suffix.textContent = `/${nextMax.replace(".", ",")}`;
+            }
+          }
+          input.value = nextIst;
+        } else {
+          input.value = raw;
+        }
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
     }
@@ -361,6 +713,16 @@ document.addEventListener("DOMContentLoaded", () => {
       });
     }
 
+    if (Array.isArray(data.remarkValues)) {
+      remarkInputs.forEach((input, index) => {
+        if (typeof data.remarkValues[index] !== "string") {
+          return;
+        }
+        input.value = data.remarkValues[index];
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
     if (Array.isArray(data.notes)) {
       notesCells.forEach((cell, index) => {
         if (typeof data.notes[index] !== "string") {
@@ -369,6 +731,7 @@ document.addEventListener("DOMContentLoaded", () => {
         cell.textContent = data.notes[index];
       });
     }
+    saveAutoWvorbeRows();
   };
 
   const setStatus = (text, isError) => {
@@ -480,6 +843,11 @@ document.addEventListener("DOMContentLoaded", () => {
       check.classList.toggle("locked-field", isPastDay);
     });
 
+    remarkInputs.forEach((input) => {
+      input.readOnly = isPastDay;
+      input.classList.toggle("locked-field", isPastDay);
+    });
+
     notesCells.forEach((cell) => {
       cell.contentEditable = isPastDay ? "false" : "true";
       cell.classList.toggle("locked-field", isPastDay);
@@ -496,11 +864,13 @@ document.addEventListener("DOMContentLoaded", () => {
   const loadFromStorage = () => {
     const storageKey = getStorageKey(selectedIso);
     applySnapshot(defaultSnapshot);
+    applyDateBasedDefaults(selectedIso, true);
 
     const raw = localStorage.getItem(storageKey);
     const selectedLabel = deDateFormatter.format(fromIsoLocal(selectedIso));
     if (raw) {
       applySnapshot(JSON.parse(raw));
+      applyDateBasedDefaults(selectedIso, false);
       setStatus(`Daten von ${selectedLabel} geladen`, false);
       return true;
     }
@@ -608,6 +978,7 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         const storageKey = getStorageKey(selectedIso);
         localStorage.setItem(storageKey, JSON.stringify(getSnapshot()));
+        saveAutoWvorbeRows();
         setStatus(`Gespeichert (${deDateFormatter.format(fromIsoLocal(selectedIso))})`, false);
       } catch (error) {
         setStatus("Speichern fehlgeschlagen", true);
@@ -729,8 +1100,11 @@ document.addEventListener("DOMContentLoaded", () => {
       hasUnsavedChanges = dirty;
     };
 
-    const createRow = (values) => {
+    const createRow = (values, isAutoGenerated = false) => {
       const row = document.createElement("tr");
+      if (isAutoGenerated) {
+        row.dataset.autoGenerated = "1";
+      }
       for (let i = 0; i < 5; i += 1) {
         const td = document.createElement("td");
         td.textContent = Array.isArray(values) && typeof values[i] === "string" ? values[i] : "";
@@ -757,41 +1131,123 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     };
 
-    const applyRows = (rows) => {
+    const applyRows = (rows, autoRows = []) => {
       const existingRows = Array.from(table.querySelectorAll("tbody tr:not(.add-row-line)"));
       existingRows.forEach((row) => row.remove());
 
-      const sourceRows = Array.isArray(rows) && rows.length > 0 ? rows : initialRows;
+      const hasManual = Array.isArray(rows) && rows.length > 0;
+      const hasAuto = Array.isArray(autoRows) && autoRows.length > 0;
+      const sourceRows = hasManual ? rows : (hasAuto ? [] : initialRows);
       sourceRows.forEach((values) => {
-        const row = createRow(values);
+        const row = createRow(values, false);
         if (addRowLine && addRowLine.parentNode) {
           addRowLine.parentNode.insertBefore(row, addRowLine);
         }
       });
 
+      if (hasAuto) {
+        autoRows.forEach((values) => {
+          const row = createRow(values, true);
+          if (addRowLine && addRowLine.parentNode) {
+            addRowLine.parentNode.insertBefore(row, addRowLine);
+          }
+        });
+      }
+
       setReadonlyLocal();
     };
 
-    const getRows = () => {
+    const getRows = (excludeAutoGenerated) => {
       const rows = Array.from(table.querySelectorAll("tbody tr:not(.add-row-line)"));
-      return rows.map((row) => Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent || ""));
+      const filteredRows = excludeAutoGenerated
+        ? rows.filter((row) => row.dataset.autoGenerated !== "1")
+        : rows;
+      return filteredRows.map((row) => Array.from(row.querySelectorAll("td")).map((cell) => cell.textContent || ""));
+    };
+
+    const normalizeRows = (rows) => {
+      if (!Array.isArray(rows)) {
+        return [];
+      }
+      return rows.filter((row) => Array.isArray(row)).map((row) => row.map((cell) => String(cell || "")));
+    };
+
+    const getRowKey = (row) => {
+      if (!Array.isArray(row)) {
+        return "";
+      }
+      return row.map((cell) => String(cell || "").trim().toLowerCase()).join("|");
     };
 
     const getStorageKeyLocal = () => `dpc:${config.storagePrefix}:${selectedIso}`;
+    const getAutoStorageKeyLocal = () => config.autoStoragePrefix ? `dpc:auto:${config.autoStoragePrefix}:${selectedIso}` : "";
     const syncSelectedDateLocal = () => {
       selectedIso = readSelectedDateFromState();
       renderSelectedDate();
     };
 
+    const hasMeaningfulRows = (rows) => {
+      if (!Array.isArray(rows)) {
+        return false;
+      }
+      return rows.some((row) => Array.isArray(row) && row.some((cell) => String(cell || "").trim() !== ""));
+    };
+
     const loadLocal = () => {
       syncSelectedDateLocal();
       const key = getStorageKeyLocal();
+      const autoKey = getAutoStorageKeyLocal();
+      const indexKey = `dpc:index:${selectedIso}`;
       const selectedLabel = deDateFormatter.format(fromIsoLocal(selectedIso));
       const raw = localStorage.getItem(key);
+      let autoRows = null;
+      if (autoKey) {
+        const autoRaw = localStorage.getItem(autoKey);
+        if (autoRaw) {
+          const autoData = JSON.parse(autoRaw);
+          autoRows = Array.isArray(autoData.rows) ? autoData.rows : [];
+        }
+      }
+
+      if (config.storagePrefix === "wvorbe" && !hasMeaningfulRows(autoRows)) {
+        const indexRaw = localStorage.getItem(indexKey);
+        if (indexRaw) {
+          const indexData = JSON.parse(indexRaw);
+          const indexAutoRows = Array.isArray(indexData.autoWvorbeRows) ? indexData.autoWvorbeRows : [];
+          if (hasMeaningfulRows(indexAutoRows)) {
+            autoRows = indexAutoRows;
+          }
+        }
+      }
+
+      const normalizedAutoRows = normalizeRows(autoRows);
+
       if (raw) {
         const data = JSON.parse(raw);
-        applyRows(Array.isArray(data.rows) ? data.rows : []);
-        setStatusLocal(`Daten von ${selectedLabel} geladen`, false);
+        const manualRows = Array.isArray(data.rows) ? data.rows : [];
+        if (hasMeaningfulRows(manualRows)) {
+          if (config.storagePrefix === "wvorbe" && hasMeaningfulRows(normalizedAutoRows)) {
+            const manualKeys = new Set(normalizeRows(manualRows).map((row) => getRowKey(row)).filter((key) => key !== ""));
+            const filteredAutoRows = normalizedAutoRows.filter((row) => !manualKeys.has(getRowKey(row)));
+            applyRows(manualRows, filteredAutoRows);
+            setStatusLocal(`Daten + Auto-Daten von ${selectedLabel} geladen`, false);
+            return true;
+          }
+          applyRows(manualRows);
+          setStatusLocal(`Daten von ${selectedLabel} geladen`, false);
+          return true;
+        }
+
+        if (hasMeaningfulRows(normalizedAutoRows)) {
+          applyRows(normalizedAutoRows);
+          setStatusLocal(`Auto-Daten von ${selectedLabel} geladen`, false);
+          return true;
+        }
+      }
+
+      if (hasMeaningfulRows(normalizedAutoRows)) {
+        applyRows(normalizedAutoRows);
+        setStatusLocal(`Auto-Daten von ${selectedLabel} geladen`, false);
         return true;
       }
 
@@ -806,7 +1262,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const payload = {
         date: deDateFormatter.format(fromIsoLocal(selectedIso)),
         savedAt: new Date().toISOString(),
-        rows: getRows()
+        rows: getRows(config.storagePrefix === "wvorbe")
       };
       localStorage.setItem(key, JSON.stringify(payload));
       setStatusLocal(`Gespeichert (${payload.date})`, false);
@@ -823,12 +1279,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (addRowBtn) {
       addRowBtn.addEventListener("click", () => {
-        const newRow = createRow([]);
+        const newRow = createRow([], false);
         if (addRowLine && addRowLine.parentNode) {
           addRowLine.parentNode.insertBefore(newRow, addRowLine);
+          const isPastDay = selectedIso < todayIso;
+          newRow.querySelectorAll("td").forEach((cell) => {
+            cell.contentEditable = isPastDay ? "false" : "true";
+            cell.classList.toggle("locked-field", isPastDay);
+          });
           const firstCell = newRow.querySelector("td");
-          if (firstCell) {
-            firstCell.contentEditable = "true";
+          if (firstCell && !isPastDay) {
             firstCell.focus();
           }
         }
@@ -838,6 +1298,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
     table.addEventListener("input", (event) => {
       if (event.target instanceof HTMLElement && event.target.closest("td[contenteditable='true']")) {
+        const row = event.target.closest("tr");
+        if (row && row.dataset.autoGenerated === "1") {
+          delete row.dataset.autoGenerated;
+        }
         setDirty(true);
       }
     });
@@ -920,7 +1384,8 @@ document.addEventListener("DOMContentLoaded", () => {
     statusId: "wvorbeStatus",
     addRowBtnId: "addWvorbeRowBtn",
     backBtnId: "wvorbeBackBtn",
-    storagePrefix: "wvorbe"
+    storagePrefix: "wvorbe",
+    autoStoragePrefix: "wvorbe"
   });
 
   initSimpleTablePage({
