@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Einstellungen</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="icon" href="icons/favicon.ico">
+</head>
+<body class="index-page index-color-font settings-page">
+  <div class="page-wrap">
+    <div class="page">
+      <div class="date-line"><span>Datum:</span><span class="line current-date"></span></div>
+      <div class="top-actions">
+        <div class="top-actions-row actions-secondary">
+          <button id="settingsBackBtn" type="button">Zurück</button>
+          <button id="settingsSaveBtn" type="button">Speichern</button>
+          <button id="settingsLoadBtn" type="button">Laden</button>
+          <button id="settingsResetBtn" type="button">Reset</button>
+          <span id="settingsStatus" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <h1>Einstellungen</h1>
+      <table class="editable-grid-table">
+        <thead>
+          <tr>
+            <th>Option</th>
+            <th>Wert</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Button Schriftgröße</td>
+            <td>
+              <select id="setBtnFs"></select>
+            </td>
+          </tr>
+          <tr>
+            <td>Datum Schriftgröße</td>
+            <td>
+              <select id="setDateFs"></select>
+            </td>
+          </tr>
+          <tr>
+            <td>Info Schriftgröße</td>
+            <td>
+              <select id="setInfoFs"></select>
+            </td>
+          </tr>
+          <tr>
+            <td>Tabellenüberschrift</td>
+            <td>
+              <select id="setThFs"></select>
+            </td>
+          </tr>
+          <tr>
+            <td>Tabelleninhalt</td>
+            <td>
+              <select id="setTdFs"></select>
+            </td>
+          </tr>
+          <tr>
+            <td>Vergangene Tage bearbeiten</td>
+            <td>
+              <select id="setAllowPastEdit"></select>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="settings-preview">
+        <p class="settings-preview-title">Live-Vorschau</p>
+        <div class="settings-preview-row settings-preview-date">Datum: 28.02.2026</div>
+        <div class="settings-preview-row settings-preview-info">Info: Daten erfolgreich geladen</div>
+        <div class="settings-preview-row settings-preview-btns">
+          <button type="button">Beispiel Button</button>
+        </div>
+        <table class="settings-preview-table">
+          <thead>
+            <tr>
+              <th>Tabellenüberschrift</th>
+              <th>Tabellenüberschrift</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Beispiel Tabelleninhalt</td>
+              <td>Beispiel Tabelleninhalt</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer>
+        <div id="kimlik">© Dilaver Bölükbaşı</div>
+        <div id="lastUpdate"></div>
+        <span id="footerVersion">Version: …</span>
+      </footer>
+    </div>
+  </div>
+  <script src="js/dpc.js" defer></script>
+</body>
+</html>

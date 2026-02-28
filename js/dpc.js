@@ -126,9 +126,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.29";
+  const appVersion = "1.0.10";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
+  const uiSettingsKey = "dpc:settings";
+  const defaultUiSettings = {
+    btnFs: "13",
+    dateFs: "11.5",
+    infoFs: "12",
+    thFs: "14",
+    tdFs: "14",
+    allowPastEdit: "0"
+  };
   let buildInfoCache = null;
   let selectedIso = todayIso;
   try {
@@ -141,6 +150,54 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   const dateTargets = document.querySelectorAll(".current-date");
+  const applyUiSettings = (settings) => {
+    const s = settings || defaultUiSettings;
+    const root = document.documentElement;
+    root.style.setProperty("--fs-btn", `${s.btnFs || defaultUiSettings.btnFs}px`);
+    root.style.setProperty("--fs-date", `${s.dateFs || defaultUiSettings.dateFs}px`);
+    root.style.setProperty("--fs-info", `${s.infoFs || defaultUiSettings.infoFs}px`);
+    root.style.setProperty("--fs-th", `${s.thFs || defaultUiSettings.thFs}px`);
+    root.style.setProperty("--fs-td", `${s.tdFs || defaultUiSettings.tdFs}px`);
+  };
+
+  const readUiSettings = () => {
+    try {
+      const raw = localStorage.getItem(uiSettingsKey);
+      if (!raw) {
+        return { ...defaultUiSettings };
+      }
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") {
+        return { ...defaultUiSettings };
+      }
+      return {
+        btnFs: String(parsed.btnFs || defaultUiSettings.btnFs),
+        dateFs: String(parsed.dateFs || defaultUiSettings.dateFs),
+        infoFs: String(parsed.infoFs || defaultUiSettings.infoFs),
+        thFs: String(parsed.thFs || defaultUiSettings.thFs),
+        tdFs: String(parsed.tdFs || defaultUiSettings.tdFs),
+        allowPastEdit: String(
+          parsed.allowPastEdit === "1" || parsed.allowPastEdit === 1 || parsed.allowPastEdit === true ? "1" : "0"
+        )
+      };
+    } catch (error) {
+      return { ...defaultUiSettings };
+    }
+  };
+
+  const saveUiSettings = (settings) => {
+    localStorage.setItem(uiSettingsKey, JSON.stringify(settings));
+  };
+
+  let uiSettings = readUiSettings();
+  applyUiSettings(uiSettings);
+  const canEditPastDays = () => String(uiSettings.allowPastEdit || "0") === "1";
+  const getCurrentWeekFridayIso = () => {
+    const monday = getWeekMonday(todayDate);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    return toIsoLocal(friday);
+  };
   const renderSelectedDate = () => {
     const label = deDateFormatter.format(fromIsoLocal(selectedIso));
     dateTargets.forEach((el) => {
@@ -788,7 +845,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const daySelect = document.getElementById("daySelect");
 
   if (kwSelect || daySelect) {
-    selectedIso = todayIso;
+    selectedIso = canEditPastDays() ? getCurrentWeekFridayIso() : todayIso;
   }
   const saveStatus = document.getElementById("saveStatus");
   const menuBtn = document.getElementById("menuBtn");
@@ -941,7 +998,8 @@ document.addEventListener("DOMContentLoaded", () => {
     "dpc:wvorbe:",
     "dpc:weing:",
     "dpc:auto:wvorbe:",
-    "dpc:selectedDate"
+    "dpc:selectedDate",
+    "dpc:settings"
   ];
 
   const isBackupKey = (key) => backupKeyPrefixes.some((prefix) => String(key).startsWith(prefix));
@@ -1058,8 +1116,141 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  const initSettingsPage = () => {
+    const saveBtnLocal = document.getElementById("settingsSaveBtn");
+    const loadBtnLocal = document.getElementById("settingsLoadBtn");
+    const resetBtnLocal = document.getElementById("settingsResetBtn");
+    const backBtnLocal = document.getElementById("settingsBackBtn");
+    const statusEl = document.getElementById("settingsStatus");
+    const btnFsEl = document.getElementById("setBtnFs");
+    const dateFsEl = document.getElementById("setDateFs");
+    const infoFsEl = document.getElementById("setInfoFs");
+    const thFsEl = document.getElementById("setThFs");
+    const tdFsEl = document.getElementById("setTdFs");
+    const allowPastEditEl = document.getElementById("setAllowPastEdit");
+
+    if (!btnFsEl || !dateFsEl || !infoFsEl || !thFsEl || !tdFsEl || !allowPastEditEl) {
+      return;
+    }
+
+    const setStatusLocal = (text, isError) => {
+      if (!statusEl) {
+        return;
+      }
+      statusEl.textContent = text;
+      statusEl.classList.toggle("error", Boolean(isError));
+    };
+
+    const fillSelect = (select, options) => {
+      select.innerHTML = "";
+      options.forEach((value) => {
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = `${value}px`;
+        select.appendChild(option);
+      });
+    };
+
+    const pxOptions = Array.from({ length: 15 }, (_, i) => String(10 + i));
+    const datePxOptions = Array.from({ length: 29 }, (_, i) => String(10 + (i * 0.5)));
+    fillSelect(btnFsEl, pxOptions);
+    fillSelect(dateFsEl, datePxOptions);
+    fillSelect(infoFsEl, pxOptions);
+    fillSelect(thFsEl, pxOptions);
+    fillSelect(tdFsEl, pxOptions);
+    allowPastEditEl.innerHTML = "";
+    [
+      { value: "0", label: "Nein" },
+      { value: "1", label: "Ja" }
+    ].forEach((item) => {
+      const option = document.createElement("option");
+      option.value = item.value;
+      option.textContent = item.label;
+      allowPastEditEl.appendChild(option);
+    });
+
+    const applyToForm = (settings) => {
+      btnFsEl.value = String(settings.btnFs);
+      dateFsEl.value = String(settings.dateFs);
+      infoFsEl.value = String(settings.infoFs);
+      thFsEl.value = String(settings.thFs);
+      tdFsEl.value = String(settings.tdFs);
+      allowPastEditEl.value = String(settings.allowPastEdit || "0");
+    };
+
+    const readFromForm = () => ({
+      btnFs: btnFsEl.value,
+      dateFs: dateFsEl.value,
+      infoFs: infoFsEl.value,
+      thFs: thFsEl.value,
+      tdFs: tdFsEl.value,
+      allowPastEdit: allowPastEditEl.value
+    });
+
+    const syncPreview = () => {
+      applyUiSettings(readFromForm());
+    };
+
+    [btnFsEl, dateFsEl, infoFsEl, thFsEl, tdFsEl, allowPastEditEl].forEach((el) => {
+      el.addEventListener("change", syncPreview);
+    });
+
+    applyToForm(uiSettings);
+    syncPreview();
+
+    if (saveBtnLocal) {
+      saveBtnLocal.addEventListener("click", () => {
+        try {
+          const settings = readFromForm();
+          saveUiSettings(settings);
+          uiSettings = settings;
+          applyUiSettings(settings);
+          setStatusLocal("Einstellungen gespeichert", false);
+        } catch (error) {
+          setStatusLocal("Speichern fehlgeschlagen", true);
+        }
+      });
+    }
+
+    if (loadBtnLocal) {
+      loadBtnLocal.addEventListener("click", () => {
+        try {
+          const settings = readUiSettings();
+          uiSettings = settings;
+          applyToForm(settings);
+          applyUiSettings(settings);
+          setStatusLocal("Einstellungen geladen", false);
+        } catch (error) {
+          setStatusLocal("Laden fehlgeschlagen", true);
+        }
+      });
+    }
+
+    if (resetBtnLocal) {
+      resetBtnLocal.addEventListener("click", () => {
+        try {
+          applyToForm(defaultUiSettings);
+          applyUiSettings(defaultUiSettings);
+          saveUiSettings(defaultUiSettings);
+          uiSettings = { ...defaultUiSettings };
+          setStatusLocal("Auf Standard zurückgesetzt", false);
+        } catch (error) {
+          setStatusLocal("Reset fehlgeschlagen", true);
+        }
+      });
+    }
+
+    if (backBtnLocal) {
+      backBtnLocal.addEventListener("click", () => {
+        window.location.href = "index.html";
+      });
+    }
+  };
+
+  initSettingsPage();
+
   const setReadonlyForPastDays = () => {
-    const isPastDay = selectedIso < todayIso;
+    const isPastDay = selectedIso < todayIso && !canEditPastDays();
 
     istInputs.forEach((input) => {
       input.readOnly = isPastDay;
@@ -1344,7 +1535,7 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     const setReadonlyLocal = () => {
-      const isPastDay = selectedIso < todayIso;
+      const isPastDay = selectedIso < todayIso && !canEditPastDays();
       const editableRows = table.querySelectorAll("tbody tr:not(.add-row-line)");
       editableRows.forEach((row) => {
         row.querySelectorAll("td").forEach((cell) => {
@@ -1600,7 +1791,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const newRow = createRow([], false);
         if (addRowLine && addRowLine.parentNode) {
           addRowLine.parentNode.insertBefore(newRow, addRowLine);
-          const isPastDay = selectedIso < todayIso;
+          const isPastDay = selectedIso < todayIso && !canEditPastDays();
           newRow.querySelectorAll("td").forEach((cell) => {
             cell.contentEditable = isPastDay ? "false" : "true";
             cell.classList.toggle("locked-field", isPastDay);
