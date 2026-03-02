@@ -679,7 +679,7 @@ td {
   color: var(--text);
   text-align: center;
   font-size: var(--fs-td);
-  font-weight: 400;
+  font-weight: 500;
   font-family: inherit;
   padding: 0;
 }
@@ -718,13 +718,13 @@ td {
 }
 
 .bemerk-cell input {
-  width: 100%;
+  width: 95%;
   border: 0;
   background: transparent;
   color: var(--text);
   text-align: left;
   font-size: var(--fs-td);
-  font-weight: 400;
+  font-weight: 600;
   font-family: inherit;
   padding: 0;
 }
@@ -845,28 +845,30 @@ tbody tr.row-done.row-not-available td {
 
 .index-page .tight th:first-child:not([colspan]),
 .index-page .tight td:first-child {
-  width: 38%;
+  width: 39%;
 }
 
 .index-page .tight th:nth-child(2),
 .index-page .tight td:nth-child(2) {
-  width: 14%;
+  width: 36%;
 }
 
+/* Vorrang: Spezifische Textausrichtung für die 3. Spalte auf index.html */
 .index-page .tight th:nth-child(3),
 .index-page .tight td:nth-child(3) {
-  width: 14%;
+  width: 5%;
 }
 
+/* Vorrang: Spezifische Textausrichtung für die 4. Spalte auf index.html */
 .index-page .tight th:nth-child(4),
 .index-page .tight td:nth-child(4) {
   width: 10%;
   text-align: center;
 }
-
+/* Vorrang: Spezifische Textausrichtung für die 5. Spalte auf index.html */
 .index-page .tight th:nth-child(5),
 .index-page .tight td:nth-child(5) {
-  width: 24%;
+  width: 10%;
 }
 .notes { margin-top: 6mm; }
 .notes-title {
