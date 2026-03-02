@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ausgang</title>
+  <title>Material Bereitstellung: -> Ausgang</title>
   <link rel="stylesheet" href="css/style.css" />
   <link rel="icon" href="icons/favicon.ico">
 </head>
@@ -13,13 +13,17 @@
     <div class="date-line"><span>Datum:</span><span class="line current-date"></span></div>
     <div class="top-actions">
       <div class="top-actions-row actions-secondary">
-        <button id="wvorbeBackBtn" type="button">Zurück</button>
-        <button id="wvorbeSaveBtn" type="button">Speichern</button>
-        <button id="wvorbeLoadBtn" type="button">Load</button>
-        <span id="wvorbeStatus" aria-live="polite"></span>
-      </div>
+        <div class="left-block">
+            <div class="left-buttons">
+                <button id="wvorbeBackBtn" type="button">Zurück</button>
+                <button id="wvorbeSaveBtn" type="button">Speichern</button>
+                <button id="wvorbeLoadBtn" type="button">Load</button>
+            </div>
+            <span id="wvorbeStatus" aria-live="polite"></span>
+        </div>
+        <button id="wvorbePrintBtn" type="button" onclick="printWvorbe()">Drucken</button>
     </div>
-    <h1>Ausgang</h1>
+    <h1>Materialbereitstellung: ➝ Ausgang</h1>
 
     <table id="wvorbeTable" class="editable-grid-table">
       <thead>
