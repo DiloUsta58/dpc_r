@@ -501,7 +501,7 @@ html, body {
   border-radius: 8px;
   padding: 4px 8px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 400;
 }
 
 .settings-page .editable-grid-table td select:focus {
