@@ -1907,3 +1907,7 @@ document.addEventListener("DOMContentLoaded", () => {
     storagePrefix: "weing"
   });
 });
+
+function printWvorbe() {
+    window.print();
+}

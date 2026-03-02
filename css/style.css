@@ -431,6 +431,7 @@ html, body {
 #settingsResetBtn,
 #settingsBackBtn,
 #wvorbeBackBtn,
+#wvorbePrintBtn,
 #weingBackBtn {
   border: 1px solid var(--line);
   background: #313131;
@@ -453,12 +454,14 @@ html, body {
 #settingsResetBtn:hover,
 #settingsBackBtn:hover,
 #wvorbeBackBtn:hover,
+#wvorbePrintBtn:hover,
 #weingBackBtn:hover {
   background: #3a3a3a;
 }
 
 #wvorbeBackBtn,
 #settingsBackBtn,
+#wvorbePrintBtn,
 #weingBackBtn {
   margin-right: 0;
   padding-inline: 10px 12px;
@@ -469,6 +472,14 @@ html, body {
 #weingBackBtn::before {
   content: "< ";
   font-weight: 700;
+}
+
+#wvorbePrintBtn::before {
+  content: "🖨 ";
+}
+
+#wvorbePrintBtn {
+  margin-left: auto;
 }
 
 #saveBtn:disabled {
@@ -625,7 +636,7 @@ html, body {
 }
 
 h1 {
-  font-size: 13px;
+  font-size: 14px;
   text-align: center;
   margin: 5mm 0 6mm;
   font-style: italic;
@@ -1038,6 +1049,8 @@ footer {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
+
+
   #saveStatus {
     width: 100%;
     text-align: left;
@@ -1046,5 +1059,33 @@ footer {
 
 @media print {
   html, body { background: #fff; color: #000; }
-  .page { margin: 0 auto; transform: none; box-shadow: none; border-radius: 0; padding: 0; }
+  .page, .page-wrap, .top-actions-row.actions-secondary { margin: 0 auto; transform: none; box-shadow: none; border-radius: 0; padding: 0; border: none !important; }
+  .button { display: none; }
+    footer, #wvorbePrintBtn, #wvorbeSaveBtn, #wvorbeLoadBtn, #wvorbeBackBtn, #wvorbeStatus, #addWvorbeRowBtn     {
+    display: none !important;
+    color:#000 !important;
+  }
+  h1 { color: #000 !important; }
+
+  .date-line {
+    color: #000 !important;
+  }
+  /* Tabellen */
+  table {
+    background: #ffffff !important;
+    border: 0.5px solid #000 !important;
+  }
+
+  th, td {
+    background: #ffffff !important;
+    color: #000000 !important;
+    border: 1px solid #000 !important;
+  }
+
+  /* Statusfarben deaktivieren */
+  tbody tr.row-done td,
+  tbody tr.row-not-available td {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }  
 }
