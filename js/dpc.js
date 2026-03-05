@@ -126,7 +126,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   const todayDate = new Date();
   const todayIso = toIsoLocal(todayDate);
-  const appVersion = "1.0.11";
+  const appVersion = "1.0.24";
   const appVersionFile = "app-version.json";
   const selectedDateStateKey = "dpc:selectedDate";
   const uiSettingsKey = "dpc:settings";
@@ -318,6 +318,7 @@ document.addEventListener("DOMContentLoaded", () => {
   checkForAppUpdate();
 
   let saveAutoWvorbeRows = () => {};
+  let updateTableDoneState = () => {};
   let suppressRemarkPropagation = false;
   const sonderRowsData = [];
   const stockRowsData = [];
@@ -501,21 +502,25 @@ document.addEventListener("DOMContentLoaded", () => {
         const value = String(bemerkInput.value || "").trim().toLowerCase();
         const isNotAvailable = value === "n.v.";
         row.classList.toggle("row-not-available", isNotAvailable);
+        row.classList.toggle("row-nv-done", isNotAvailable);
         syncRemarkLockState(isNotAvailable ? "n.v." : "");
         if (isNotAvailable) {
           propagateNvToSamePosition(rowLabel, bemerkInput);
         }
+        updateTableDoneState(row.closest("table.tight"));
       };
 
       const validateBemerkValue = () => {
         const normalized = normalizeBemerkValue(bemerkInput.value);
         bemerkInput.value = normalized;
         row.classList.toggle("row-not-available", normalized === "n.v.");
+        row.classList.toggle("row-nv-done", normalized === "n.v.");
         syncRemarkLockState(normalized);
         if (normalized === "n.v.") {
           propagateNvToSamePosition(rowLabel, bemerkInput);
         }
         saveAutoWvorbeRows();
+        updateTableDoneState(row.closest("table.tight"));
       };
 
       bemerkInput.addEventListener("input", syncBemerkState);
@@ -820,20 +825,82 @@ document.addEventListener("DOMContentLoaded", () => {
     saveAutoWvorbeRows();
   };
 
+  updateTableDoneState = (table) => {
+    if (!table) {
+      return;
+    }
+    const headCheck = table.querySelector("thead .section input[type='checkbox']");
+    const isSonderbestTableEl = table.classList.contains("tbl-wa");
+    const rows = Array.from(table.querySelectorAll("tbody tr"));
+    if (rows.length === 0) {
+      table.classList.remove("table-done");
+      table.classList.remove("table-nv-done");
+      return;
+    }
+    let hasNv = false;
+    const allDone = rows.every((tr) => {
+      const check = tr.querySelector(".status-check");
+      const materialInput = tr.querySelector("td:nth-child(1) input[type='text']");
+      const mengeInput = tr.querySelector("td:nth-child(2) input[type='text']");
+      const bereitInput = tr.querySelector("td:nth-child(3) input[type='text']");
+      const remarkInput = tr.querySelector(".bemerk-cell input[type='text']");
+      const materialValue = materialInput ? String(materialInput.value || "").trim() : "";
+      const mengeValue = mengeInput ? String(mengeInput.value || "").trim() : "";
+      const bereitRaw = bereitInput ? String(bereitInput.value || "").trim() : "";
+      const remarkIsNv = remarkInput && String(remarkInput.value || "").trim().toLowerCase() === "n.v.";
+      if (remarkIsNv) {
+        hasNv = true;
+      }
+      const rowIsEmptySonderbest = isSonderbestTableEl
+        && materialValue === ""
+        && mengeValue === ""
+        && bereitRaw === ""
+        && !remarkIsNv
+        && !(check && check.checked);
+      if (rowIsEmptySonderbest) {
+        return true;
+      }
+      const bereitVal = bereitInput ? parseNumber(String(bereitRaw).replace(",", ".")) : null;
+      const bereitZero = bereitVal !== null && bereitVal <= 0;
+      const checkDone = check && (check.checked || check.disabled);
+      return checkDone || bereitZero || remarkIsNv;
+    });
+    const tableEnabled = !headCheck || headCheck.checked;
+    table.classList.toggle("table-done", tableEnabled && allDone);
+    table.classList.toggle("table-nv-done", tableEnabled && allDone && hasNv);
+  };
+
+  const headChecks = Array.from(document.querySelectorAll(".status-checkKE, .status-checkFM1, .status-checkFM2, .status-checkFM3, .status-checkFM4, .status-checkFM5, .status-checkFMStrahlhaus, .status-checkWA, .status-checkFMpowergr"));
   const statusChecks = document.querySelectorAll(".status-check");
   statusChecks.forEach((check) => {
     const row = check.closest("tr");
     if (!row) {
       return;
     }
+    const table = row.closest("table.tight");
 
     const syncRowState = () => {
-      row.classList.toggle("row-done", check.checked);
+      const remarkInput = row.querySelector(".bemerk-cell input[type='text']");
+      const remarkIsNv = remarkInput && String(remarkInput.value || "").trim().toLowerCase() === "n.v.";
+      const done = check.checked;
+      row.classList.toggle("row-done", done);
+      row.classList.toggle("row-nv-done", done && remarkIsNv);
       saveAutoWvorbeRows();
+      updateTableDoneState(table);
     };
 
     check.addEventListener("change", syncRowState);
     syncRowState();
+  });
+
+  headChecks.forEach((check) => {
+    const table = check.closest("table.tight");
+    const syncHeadState = () => {
+      updateTableDoneState(table);
+    };
+
+    check.addEventListener("change", syncHeadState);
+    syncHeadState();
   });
 
   const saveBtn = document.getElementById("saveBtn");
@@ -871,12 +938,14 @@ document.addEventListener("DOMContentLoaded", () => {
     const notes = notesCells.map((el) => el.textContent || "");
     const sonderMaterials = sonderMaterialInputs.map((el) => el.value || "");
     const sonderBereitstValues = sonderBereitstInputs.map((el) => el.value || "");
+    const headCheckValues = headChecks.map((el) => el.checked);
 
     return {
       date: deDateFormatter.format(fromIsoLocal(selectedIso)),
       savedAt: new Date().toISOString(),
       istMaxValues,
       checks: checksValues,
+      headChecks: headCheckValues,
       remarkValues,
       notes,
       sonderMaterials,
@@ -953,6 +1022,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         input.value = data.remarkValues[index];
         input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    }
+
+    if (Array.isArray(data.headChecks)) {
+      headChecks.forEach((check, index) => {
+        if (typeof data.headChecks[index] !== "boolean") {
+          return;
+        }
+        check.checked = data.headChecks[index];
+        check.dispatchEvent(new Event("change", { bubbles: true }));
       });
     }
 

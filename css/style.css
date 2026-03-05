@@ -762,6 +762,19 @@ td {
   margin: 0 auto;
 }
 
+.status-checkKE,
+.status-checkFM1,
+.status-checkFM2,
+.status-checkFM3,
+.status-checkFM4,
+.status-checkFM5,
+.status-checkFMStrahlhaus,
+.status-checkWA,
+.status-checkFMpowergr {
+  margin-left: 0;
+  margin-right: auto;
+}
+
 .locked-field {
   opacity: 0.8;
 }
@@ -827,6 +840,22 @@ tbody tr.row-done.row-not-available td {
   color: #fff;
 }
 
+tbody tr.row-nv-done,
+tbody tr.row-nv-done:hover {
+  background: #6b5d1a;
+}
+
+tbody tr.row-nv-done td {
+  background: #6b5d1a;
+  color: #f3f6fb;
+}
+
+tbody tr.row-nv-done .editable-cell input,
+tbody tr.row-nv-done .bemerk-cell input,
+tbody tr.row-nv-done .max-suffix {
+  color: #f3f6fb;
+}
+
 /* Hohe Spezifität für index.html, damit Statusfarben die zebra/td-Basisfarben übersteuern */
 .index-color-font .tight tbody tr.row-done td {
   background: var(--tbltd-bg);
@@ -843,7 +872,112 @@ tbody tr.row-done.row-not-available td {
   color: #fff;
 }
 
-.section { text-align: center; }
+.tight.table-done {
+  box-shadow: 0 0 0 2px #2b4c31, 0 12px 26px rgba(0, 0, 0, 0.35);
+  border-color: #2b4c31;
+}
+
+.tight.table-done th {
+  background: #2f3c2f;
+}
+
+.tight.table-done td {
+  background: #233026;
+}
+
+.tight.table-done tbody tr:nth-child(even) td {
+  background: #27352b;
+}
+
+.tight.table-nv-done {
+  box-shadow: 0 0 0 2px #8a7a29, 0 12px 26px rgba(0, 0, 0, 0.35);
+  border-color: #8a7a29;
+}
+
+.tight.table-nv-done th {
+  background: #7a6b1f;
+  color: #fff;
+}
+
+.tight.table-nv-done td {
+  background: #4f4517;
+  color: #f8f8f8;
+}
+
+.tight.table-nv-done tbody tr:nth-child(even) td {
+  background: #554b1a;
+}
+
+.index-color-font .tight.table-nv-done {
+  box-shadow: 0 0 0 2px #8a7a29, 0 12px 26px rgba(0, 0, 0, 0.35);
+  border-color: #8a7a29;
+}
+
+.index-color-font .tight.table-nv-done th {
+  background: #7a6b1f;
+  color: #fff7d6;
+}
+
+.index-color-font .tight.table-nv-done td,
+.index-color-font .tight.table-nv-done tbody tr:nth-child(even) td,
+.index-color-font .tight.table-nv-done tbody tr.row-done td,
+.index-color-font .tight.table-nv-done tbody tr.row-not-available td,
+.index-color-font .tight.table-nv-done tbody tr.row-done.row-not-available td,
+.index-color-font .tight.table-nv-done tbody tr.row-nv-done td {
+  background: #4f4517;
+  color: #f8f8f8;
+}
+
+.index-color-font .tight.table-nv-done .editable-cell input,
+.index-color-font .tight.table-nv-done .bemerk-cell input,
+.index-color-font .tight.table-nv-done .max-suffix {
+  color: #f8f8f8;
+}
+
+.tight.table-nv-done tbody tr.row-not-available td,
+.tight.table-nv-done tbody tr.row-done.row-not-available td,
+.tight.table-nv-done tbody tr.row-nv-done td,
+.index-color-font .tight.table-nv-done tbody tr.row-not-available td,
+.index-color-font .tight.table-nv-done tbody tr.row-done.row-not-available td,
+.index-color-font .tight.table-nv-done tbody tr.row-nv-done td {
+  background: var(--tblN-L-bg);
+  color: #fff;
+}
+
+.tight.table-nv-done tbody tr.row-not-available .editable-cell input,
+.tight.table-nv-done tbody tr.row-not-available .bemerk-cell input,
+.tight.table-nv-done tbody tr.row-not-available .max-suffix,
+.tight.table-nv-done tbody tr.row-done.row-not-available .editable-cell input,
+.tight.table-nv-done tbody tr.row-done.row-not-available .bemerk-cell input,
+.tight.table-nv-done tbody tr.row-done.row-not-available .max-suffix,
+.tight.table-nv-done tbody tr.row-nv-done .editable-cell input,
+.tight.table-nv-done tbody tr.row-nv-done .bemerk-cell input,
+.tight.table-nv-done tbody tr.row-nv-done .max-suffix,
+.index-color-font .tight.table-nv-done tbody tr.row-not-available .editable-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-not-available .bemerk-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-not-available .max-suffix,
+.index-color-font .tight.table-nv-done tbody tr.row-done.row-not-available .editable-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-done.row-not-available .bemerk-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-done.row-not-available .max-suffix,
+.index-color-font .tight.table-nv-done tbody tr.row-nv-done .editable-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-nv-done .bemerk-cell input,
+.index-color-font .tight.table-nv-done tbody tr.row-nv-done .max-suffix {
+  color: #fff;
+}
+
+.section {
+  text-align: center;
+  position: relative;
+  padding-left: 22px;
+}
+
+.section input[type="checkbox"] {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+}
 
 .grid {
   display: grid;
@@ -983,6 +1117,7 @@ tbody tr.row-done.row-not-available td {
 .dept-wa { color: #a8e9c5; font-weight: 700; }
 .dept-fm { color: #b7cbff; font-weight: 700; }
 .red { color: #ffb0b0; }
+
 
 footer {
   margin-top: 10px;
