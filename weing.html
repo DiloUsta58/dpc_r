@@ -13,13 +13,18 @@
     <div class="date-line"><span>Datum:</span><span class="line current-date"></span></div>
     <div class="top-actions">
       <div class="top-actions-row actions-secondary">
-        <button id="weingBackBtn" type="button">Zurück</button>
-        <button id="weingSaveBtn" type="button">Speichern</button>
-        <button id="weingLoadBtn" type="button">Load</button>
-        <span id="weingStatus" aria-live="polite"></span>
+        <div class="left-block">
+          <div class="left-buttons">
+            <button id="weingBackBtn" type="button">Zurück</button>
+            <button id="weingSaveBtn" type="button">Speichern</button>
+            <button id="weingLoadBtn" type="button">Load</button>
+          </div>
+          <span id="weingStatus" aria-live="polite"></span>
+        </div>
+        <button id="weingPrintBtn" type="button" onclick="window.print()">Drucken</button>
       </div>
     </div>
-    <h1>Eingang</h1>
+    <h1>Material Wahreneingang: ↢ Lieferung</h1>
 
     <table id="weingTable" class="editable-grid-table">
       <thead>
@@ -71,6 +76,5 @@
   <script src="js/dpc.js" defer></script>
 </body>
 </html>
-
 
 
